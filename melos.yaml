@@ -1,0 +1,20 @@
+name: auto_mock_workspace
+
+packages:
+  - packages/*
+
+scripts:
+  analyze:
+    run: melos exec --concurrency=1 -- "dart analyze --fatal-infos"
+
+  test:
+    run: melos exec --concurrency=1 --dir-exists=test -- "dart test"
+
+  format:
+    run: melos exec -- "dart format ."
+
+  format-check:
+    run: melos exec -- "dart format --output=none --set-exit-if-changed ."
+
+  publish-dry-run:
+    run: melos exec --no-private --concurrency=1 -- "dart pub publish --dry-run"

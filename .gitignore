@@ -1,0 +1,18 @@
+# Dart / pub
+.dart_tool/
+.packages
+build/
+pubspec.lock
+pubspec_overrides.yaml
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+
+# Melos
+melos_*.iml
+.fvm/

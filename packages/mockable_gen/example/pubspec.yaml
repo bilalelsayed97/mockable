@@ -1,0 +1,13 @@
+name: mockable_gen_example
+description: Example consumer of mockable + mockable_gen.
+publish_to: none
+
+environment:
+  sdk: ^3.4.0
+
+dependencies:
+  mockable: ^0.1.0
+
+dev_dependencies:
+  build_runner: ^2.4.13
+  mockable_gen: ^0.1.0
