@@ -1,3 +1,10 @@
+## 0.2.0
+
+- Version sync with `mockable_gen` 0.2.0 (which adds auto-mocking of
+  unannotated nested model types). No functional changes in this package —
+  the runtime/annotation surface (`@Mockable()`, `@MockableIgnore()`,
+  `MockFaker`) is unchanged from 0.1.0.
+
 ## 0.1.0
 
 - Initial release.

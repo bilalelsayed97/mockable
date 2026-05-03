@@ -6,8 +6,8 @@ environment:
   sdk: ^3.4.0
 
 dependencies:
-  mockable: ^0.1.0
+  mockable: ^0.2.0
 
 dev_dependencies:
   build_runner: ^2.4.13
-  mockable_gen: ^0.1.0
+  mockable_gen: ^0.2.0

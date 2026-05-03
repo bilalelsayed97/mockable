@@ -8,7 +8,7 @@
 
 ```yaml
 dependencies:
-  mockable: ^0.1.0
+  mockable: ^0.2.0
 
 dev_dependencies:
   mockable_gen: ^0.2.0
