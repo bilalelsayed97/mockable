@@ -200,6 +200,217 @@ class Item {
         },
       );
     });
+
+    test('auto-mocks an unannotated nested model via _\$mockX helper',
+        () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/claim.dart': '''
+import 'package:mockable/mockable.dart';
+
+part 'claim.mock.g.dart';
+
+@Mockable()
+class Claim {
+  const Claim({required this.policy});
+  final Policy policy;
+}
+
+class Policy {
+  const Policy({required this.number});
+  final String number;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/claim.mock.g.dart': decodedMatches(allOf(
+            contains(r'policy: _$mockPolicy()'),
+            contains(r'Policy _$mockPolicy() => Policy('),
+            contains('number: MockFaker.word()'),
+          )),
+        },
+      );
+    });
+
+    test('auto-mocks unannotated nested types inside lists', () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/claim_with_docs.dart': '''
+import 'package:mockable/mockable.dart';
+
+part 'claim_with_docs.mock.g.dart';
+
+@Mockable()
+class ClaimWithDocs {
+  const ClaimWithDocs({required this.docs});
+  final List<Doc> docs;
+}
+
+class Doc {
+  const Doc({required this.title});
+  final String title;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/claim_with_docs.mock.g.dart': decodedMatches(allOf(
+            contains(r'docs: List.generate(3, (_) => _$mockDoc())'),
+            contains(r'Doc _$mockDoc() => Doc('),
+            contains('title: MockFaker.sentence()'),
+          )),
+        },
+      );
+    });
+
+    test('auto-mock recurses through multiple unannotated levels', () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/deep.dart': '''
+import 'package:mockable/mockable.dart';
+
+part 'deep.mock.g.dart';
+
+@Mockable()
+class A {
+  const A({required this.b});
+  final B b;
+}
+
+class B {
+  const B({required this.c});
+  final C c;
+}
+
+class C {
+  const C({required this.value});
+  final String value;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/deep.mock.g.dart': decodedMatches(allOf(
+            contains(r'b: _$mockB()'),
+            contains(r'B _$mockB() => B('),
+            contains(r'c: _$mockC()'),
+            contains(r'C _$mockC() => C('),
+          )),
+        },
+      );
+    });
+
+    test('auto-mock dedupes when the same nested type appears twice',
+        () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/dedup.dart': '''
+import 'package:mockable/mockable.dart';
+
+part 'dedup.mock.g.dart';
+
+@Mockable()
+class Pair {
+  const Pair({required this.left, required this.right});
+  final Side left;
+  final Side right;
+}
+
+class Side {
+  const Side({required this.label});
+  final String label;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/dedup.mock.g.dart': decodedMatches(predicate<String>((src) {
+            final matches = RegExp(r'Side _\$mockSide\(\) => Side\(')
+                .allMatches(src)
+                .length;
+            return matches == 1 &&
+                src.contains(r'left: _$mockSide()') &&
+                src.contains(r'right: _$mockSide()');
+          }, 'emits exactly one _\$mockSide helper used by both fields')),
+        },
+      );
+    });
+
+    test('auto-mock prefers a hand-written XxxMock extension over a helper',
+        () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/handwritten_nested.dart': '''
+import 'package:mockable/mockable.dart';
+
+part 'handwritten_nested.mock.g.dart';
+
+@Mockable()
+class Outer {
+  const Outer({required this.inner});
+  final Inner inner;
+}
+
+class Inner {
+  const Inner({required this.label});
+  final String label;
+}
+
+extension InnerMock on Inner {
+  static Inner mock() => const Inner(label: 'fixed');
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/handwritten_nested.mock.g.dart':
+              decodedMatches(predicate<String>((src) {
+            return src.contains('inner: InnerMock.mock()') &&
+                !src.contains(r'_$mockInner');
+          }, 'uses hand-written InnerMock and emits no _\$mockInner helper')),
+        },
+      );
+    });
+
+    test('auto-mock handles A -> B -> A cycles via the cycle fallback',
+        () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/cycle.dart': '''
+import 'package:mockable/mockable.dart';
+
+part 'cycle.mock.g.dart';
+
+@Mockable()
+class Node {
+  const Node({required this.child});
+  final Leaf child;
+}
+
+class Leaf {
+  const Leaf({this.parent});
+  final Leaf? parent;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/cycle.mock.g.dart':
+              decodedMatches(predicate<String>((src) {
+            return src.contains(r'child: _$mockLeaf()') &&
+                src.contains(r'Leaf _$mockLeaf() => Leaf(') &&
+                src.contains('parent: null');
+          }, 'emits Leaf helper with cycle fallback (null) for self-reference')),
+        },
+      );
+    });
   });
 }
 

@@ -1,3 +1,18 @@
+## 0.2.0
+
+- Auto-mock unannotated nested model types. When an `@Mockable()` class has a
+  field whose type is itself a model class without `@Mockable()` and without a
+  hand-written `XxxMock` extension, the generator now emits a private
+  `_$mockXxx()` helper in the same `.mock.g.dart` file and references it from
+  the parent's factory — instead of emitting a broken `XxxMock.mock()` call.
+- Helpers are dedup'd by type name within each output file, so referencing the
+  same nested type from multiple fields produces a single helper.
+- Recursion is depth-unbounded but cycle-safe: A → B → A reuses the existing
+  cycle fallback (`.empty()` constructor if present, else `null` for nullable
+  fields, else a default constructor call).
+- Resolution priority for nested model types: `@Mockable`-annotated > existing
+  `XxxMock` extension > generated `_$mockXxx()` helper.
+
 ## 0.1.0
 
 - Initial release.

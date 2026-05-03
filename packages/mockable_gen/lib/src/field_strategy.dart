@@ -4,27 +4,40 @@ import 'package:analyzer/dart/element/type.dart';
 
 import 'cycle_tracker.dart';
 
+/// Callback the field strategy invokes when it encounters a nested model type
+/// that is *not* `@Mockable()`-annotated and has no hand-written `XxxMock`
+/// extension. The callback is responsible for emitting (or reusing) a helper
+/// for the type and returning the helper's identifier (e.g.
+/// `_$mockDwPolicyDetails`). Implemented in [code_emitter] so generation and
+/// the registry share the same helper map per output file.
+typedef AutoMockRegister = String Function(
+  InterfaceElement element,
+  CycleTracker tracker,
+);
+
 /// Returns the source-code expression that should be used as the value for a
 /// constructor parameter when generating a `mock()` factory.
 ///
 /// [paramName] is the formal parameter name (used for name-based heuristics).
-/// [type] is the declared type. [tracker] is shared cycle state.
+/// [type] is the declared type. [tracker] is shared cycle state. [auto], when
+/// provided, enables recursion into unannotated nested model types.
 String emitValueForParameter({
   required String paramName,
   required DartType type,
   required CycleTracker tracker,
   required bool ignored,
+  AutoMockRegister? auto,
 }) {
   if (ignored) {
     return type.nullabilitySuffix == NullabilitySuffix.question
         ? 'null'
-        : _typeFallback(type, tracker);
+        : _typeFallback(type, tracker, auto);
   }
 
   final byName = _byName(paramName, type);
   if (byName != null) return byName;
 
-  return _typeFallback(type, tracker);
+  return _typeFallback(type, tracker, auto);
 }
 
 /// Returns `true` if [param] is annotated with `@MockableIgnore()`. Walks both
@@ -96,7 +109,11 @@ String? _byName(String paramName, DartType type) {
 
 // ── type fallbacks ──────────────────────────────────────────────────────
 
-String _typeFallback(DartType type, CycleTracker tracker) {
+String _typeFallback(
+  DartType type,
+  CycleTracker tracker,
+  AutoMockRegister? auto,
+) {
   if (type.isDartCoreString) return 'MockFaker.word()';
   if (type.isDartCoreInt) return 'MockFaker.integer()';
   if (type.isDartCoreDouble || type.isDartCoreNum) return 'MockFaker.decimal()';
@@ -111,18 +128,24 @@ String _typeFallback(DartType type, CycleTracker tracker) {
   if (type.isDartCoreList && type is InterfaceType) {
     final inner = type.typeArguments.firstOrNull;
     if (inner == null) return 'const []';
-    if (_isMockableModel(inner) && inner.element is InterfaceElement) {
-      final mockClassName = '${inner.element!.name}Mock';
-      return '$mockClassName.mockList(3)';
+    final innerEl = inner.element;
+    if (_isMockableModel(inner) && innerEl is InterfaceElement) {
+      if (_isAnnotatedMockable(innerEl) || _hasMockExtension(innerEl)) {
+        return '${innerEl.name}Mock.mockList(3)';
+      }
+      if (auto != null && !tracker.isInCycle(innerEl)) {
+        final helper = auto(innerEl, tracker);
+        return 'List.generate(3, (_) => $helper())';
+      }
     }
-    final innerExpr = _typeFallback(inner, tracker);
+    final innerExpr = _typeFallback(inner, tracker, auto);
     return 'List.generate(3, (_) => $innerExpr)';
   }
 
   if (type.isDartCoreSet && type is InterfaceType) {
     final inner = type.typeArguments.firstOrNull;
     if (inner == null) return 'const <dynamic>{}';
-    final innerExpr = _typeFallback(inner, tracker);
+    final innerExpr = _typeFallback(inner, tracker, auto);
     return '{$innerExpr}';
   }
 
@@ -143,6 +166,12 @@ String _typeFallback(DartType type, CycleTracker tracker) {
     if (tracker.isInCycle(element)) {
       return _cycleFallback(type, element);
     }
+    if (_isAnnotatedMockable(element) || _hasMockExtension(element)) {
+      return '${element.name}Mock.mock()';
+    }
+    if (auto != null) {
+      return '${auto(element, tracker)}()';
+    }
     return '${element.name}Mock.mock()';
   }
 
@@ -158,6 +187,25 @@ String _typeFallback(DartType type, CycleTracker tracker) {
   // something that may compile but will mislead.
   final name = element?.name ?? type.getDisplayString();
   return '/* TODO(mockable_gen): provide value for $name */ null as $name';
+}
+
+bool _isAnnotatedMockable(InterfaceElement element) {
+  for (final m in element.metadata.annotations) {
+    final value = m.computeConstantValue();
+    final t = value?.type;
+    if (t == null) continue;
+    if (t.element?.name == 'Mockable') return true;
+  }
+  return false;
+}
+
+bool _hasMockExtension(InterfaceElement element) {
+  final library = element.library;
+  final expected = '${element.name}Mock';
+  for (final ext in library.extensions) {
+    if (ext.name == expected) return true;
+  }
+  return false;
 }
 
 bool _isMockableModel(DartType type) {
