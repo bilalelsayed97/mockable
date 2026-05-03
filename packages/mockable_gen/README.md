@@ -11,7 +11,7 @@ dependencies:
   mockable: ^0.1.0
 
 dev_dependencies:
-  mockable_gen: ^0.1.0
+  mockable_gen: ^0.2.0
   build_runner: ^2.4.13
 ```
 
@@ -65,6 +65,46 @@ For each class annotated with `@Mockable()`:
     - **Field-name heuristics** — `email` → `MockFaker.email()`, `phone` → `MockFaker.phone()`, etc. (see the [mockable README](../mockable/README.md) for the full table).
     - **Type-based fallback** — `String` → `MockFaker.word()`, `int` → `MockFaker.integer()`, `bool` → `MockFaker.boolean()`, `DateTime` → `MockFaker.dateTime()`, enums → first non-`unknown`/`none` value, nested `@Mockable` models → `XxxMock.mock()`, `List<T>` → `TMock.mockList(3)` or `List.generate(3, ...)`.
 3. Generates the `XxxMock` extension with `mock()` and `mockList([int count = N])`.
+
+## Nested types — no annotation needed (since 0.2.0)
+
+You only need `@Mockable()` on the root class. Any nested model type referenced in a field is auto-mocked via a private `_$mockXxx()` helper emitted into the same `.mock.g.dart` file — no need to annotate every model in a deep graph.
+
+```dart
+@Mockable()
+class Claim {
+  const Claim({required this.policy, required this.docs});
+  final Policy policy;        // not annotated — auto-mocked
+  final List<Doc> docs;       // not annotated — auto-mocked
+}
+
+class Policy {
+  const Policy({required this.number});
+  final String number;
+}
+
+class Doc {
+  const Doc({required this.title});
+  final String title;
+}
+```
+
+Generated:
+
+```dart
+extension ClaimMock on Claim {
+  static Claim mock() => Claim(
+        policy: _$mockPolicy(),
+        docs: List.generate(3, (_) => _$mockDoc()),
+      );
+  // ...
+}
+
+Policy _$mockPolicy() => Policy(number: MockFaker.word());
+Doc _$mockDoc() => Doc(title: MockFaker.sentence());
+```
+
+Resolution priority for a nested type: `@Mockable()`-annotated → hand-written `XxxMock` extension → auto-generated `_$mockXxx()` helper. Helpers are dedup'd per file; cycles are handled the same way as the root case.
 
 ## Pairs naturally with
 
