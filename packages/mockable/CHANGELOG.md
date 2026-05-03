@@ -1,3 +1,7 @@
+## 0.2.2
+
+- Republish in lockstep with `mockable_gen 0.2.2`. No API changes.
+
 ## 0.2.1
 
 - Republish in lockstep with `mockable_gen 0.2.1`. No API changes; this

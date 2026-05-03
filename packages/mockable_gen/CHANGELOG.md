@@ -1,3 +1,12 @@
+## 0.2.2
+
+- Raise `analyzer` lower bound to `>=8.0.0`. The generator uses the unified
+  Element API (`LibraryElement.extensions`, `ConstructorElement.formalParameters`,
+  `FormalParameterElement`, `Metadata.annotations`, `EnumElement.constants`),
+  which only exists on analyzer 8+. The previous `>=7.0.0` floor allowed pub
+  to resolve analyzer 7.x and fail at compile time.
+- Released in lockstep with `mockable 0.2.2`.
+
 ## 0.2.1
 
 - Fix `mockable` dependency constraint: now requires `mockable: ^0.2.1`
