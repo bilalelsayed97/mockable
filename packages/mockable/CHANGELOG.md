@@ -1,3 +1,9 @@
+## 0.2.1
+
+- Republish in lockstep with `mockable_gen 0.2.1`. No API changes; this
+  version exists so `mockable` and `mockable_gen` share a version number
+  going forward.
+
 ## 0.2.0
 
 - Version sync with `mockable_gen` 0.2.0 (which adds auto-mocking of

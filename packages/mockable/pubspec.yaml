@@ -2,7 +2,7 @@ name: mockable
 description: >-
   Annotation and runtime helpers for generating realistic mock instances of
   your Dart classes. Pairs with mockable_gen for build_runner code generation.
-version: 0.2.0
+version: 0.2.1
 repository: https://github.com/bilalelsayed97/mockable
 issue_tracker: https://github.com/bilalelsayed97/mockable/issues
 homepage: https://github.com/bilalelsayed97/mockable

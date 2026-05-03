@@ -11,7 +11,7 @@ dependencies:
   mockable: ^0.2.0
 
 dev_dependencies:
-  mockable_gen: ^0.2.0
+  mockable_gen: ^0.2.1
   build_runner: ^2.4.13
 ```
 

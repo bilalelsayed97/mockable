@@ -1,3 +1,10 @@
+## 0.2.1
+
+- Fix `mockable` dependency constraint: now requires `mockable: ^0.2.1`
+  (0.2.0 was published with a stale `^0.1.0` constraint, which prevented
+  consumers from depending on the latest `mockable` alongside `mockable_gen`).
+- Released in lockstep with `mockable 0.2.1`.
+
 ## 0.2.0
 
 - Auto-mock unannotated nested model types. When an `@Mockable()` class has a
