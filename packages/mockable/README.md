@@ -10,21 +10,22 @@ Useful for [Skeletonizer](https://pub.dev/packages/skeletonizer) loading screens
 
 ```yaml
 dependencies:
-  mockable: ^0.2.0
+  mockable: ^0.3.0
 
 dev_dependencies:
-  mockable_gen: ^0.2.0
+  mockable_gen: ^0.3.0
   build_runner: ^2.4.13
 ```
 
+> **Upgrading from 0.2.x?** The generated output moved from a `part` file to a
+> standalone library — see the [mockable_gen migration guide](../mockable_gen/README.md#migrating-from-02x-to-030).
+
 ## Usage
 
-Annotate any class with `@Mockable()` and add a `part` directive:
+Annotate any class with `@Mockable()`:
 
 ```dart
 import 'package:mockable/mockable.dart';
-
-part 'user.mock.g.dart';
 
 @Mockable()
 class User {
@@ -42,7 +43,8 @@ Run the generator:
 dart run build_runner build
 ```
 
-A sibling `user.mock.g.dart` appears with:
+A standalone `user.mock.dart` library appears — import it where you need the
+mock (`import 'package:your_app/user.mock.dart';`):
 
 ```dart
 extension UserMock on User {

@@ -14,8 +14,6 @@ void main() {
           'pkg|lib/user.dart': '''
 import 'package:mockable/mockable.dart';
 
-part 'user.mock.g.dart';
-
 @Mockable()
 class User {
   const User({required this.id, required this.email, required this.fullName});
@@ -27,14 +25,18 @@ class User {
 ''',
         },
         outputs: {
-          'pkg|lib/user.mock.g.dart': decodedMatches(allOf(
+          'pkg|lib/user.mock.dart': decodedMatches(allOf([
+            // Standalone library, not a part file.
+            isNot(contains('part of')),
+            contains("import 'package:mockable/mockable.dart';"),
+            contains("import 'package:pkg/user.dart';"),
             contains('extension UserMock on User'),
-            contains('static User mock() => User('),
+            contains('static User mock()'),
             contains('id: MockFaker.id()'),
             contains('email: MockFaker.email()'),
             contains('fullName: MockFaker.name()'),
             contains('static List<User> mockList([int count = 10])'),
-          )),
+          ])),
         },
       );
     });
@@ -47,8 +49,6 @@ class User {
           'pkg|lib/post.dart': '''
 import 'package:mockable/mockable.dart';
 
-part 'post.mock.g.dart';
-
 @Mockable(defaultCount: 5)
 class Post {
   const Post({required this.title});
@@ -57,7 +57,7 @@ class Post {
 ''',
         },
         outputs: {
-          'pkg|lib/post.mock.g.dart':
+          'pkg|lib/post.mock.dart':
               decodedMatches(contains('mockList([int count = 5])')),
         },
       );
@@ -71,8 +71,6 @@ class Post {
           'pkg|lib/widget_data.dart': '''
 import 'package:mockable/mockable.dart';
 
-part 'widget_data.mock.g.dart';
-
 @Mockable()
 class WidgetData {
   const WidgetData({required this.label, required this.count, required this.active});
@@ -83,7 +81,7 @@ class WidgetData {
 ''',
         },
         outputs: {
-          'pkg|lib/widget_data.mock.g.dart': decodedMatches(allOf(
+          'pkg|lib/widget_data.mock.dart': decodedMatches(allOf(
             contains('label: MockFaker.word()'),
             contains('count: MockFaker.integer()'),
             contains('active: MockFaker.boolean()'),
@@ -100,8 +98,6 @@ class WidgetData {
           'pkg|lib/order.dart': '''
 import 'package:mockable/mockable.dart';
 
-part 'order.mock.g.dart';
-
 @Mockable()
 class Order {
   const Order({required this.id, this.opaque});
@@ -111,7 +107,7 @@ class Order {
 ''',
         },
         outputs: {
-          'pkg|lib/order.mock.g.dart': decodedMatches(allOf(
+          'pkg|lib/order.mock.dart': decodedMatches(allOf(
             contains('id: MockFaker.id()'),
             contains('opaque: null'),
           )),
@@ -151,8 +147,6 @@ extension HandcraftedMock on Handcrafted {
           'pkg|lib/tags.dart': '''
 import 'package:mockable/mockable.dart';
 
-part 'tags.mock.g.dart';
-
 @Mockable()
 class Tagged {
   const Tagged({required this.tags});
@@ -161,15 +155,14 @@ class Tagged {
 ''',
         },
         outputs: {
-          'pkg|lib/tags.mock.g.dart': decodedMatches(
+          'pkg|lib/tags.mock.dart': decodedMatches(
             contains('tags: List.generate(3, (_) => MockFaker.word())'),
           ),
         },
       );
     });
 
-    test('lists of a nested mockable model call NestedMock.mockList(3)',
-        () async {
+    test('lists of a nested model inline a helper via List.generate', () async {
       await testBuilder(
         mockBuilder(BuilderOptions.empty),
         const {
@@ -177,15 +170,12 @@ class Tagged {
           'pkg|lib/cart.dart': '''
 import 'package:mockable/mockable.dart';
 
-part 'cart.mock.g.dart';
-
 @Mockable()
 class Cart {
   const Cart({required this.items});
   final List<Item> items;
 }
 
-@Mockable()
 class Item {
   const Item({required this.sku});
   final String sku;
@@ -193,9 +183,9 @@ class Item {
 ''',
         },
         outputs: {
-          'pkg|lib/cart.mock.g.dart': decodedMatches(allOf(
-            contains('items: ItemMock.mockList(3)'),
-            contains('extension ItemMock on Item'),
+          'pkg|lib/cart.mock.dart': decodedMatches(allOf(
+            contains(r'items: List.generate(3, (_) => _$mockItem())'),
+            contains(r'Item _$mockItem() => Item('),
           )),
         },
       );
@@ -210,8 +200,6 @@ class Item {
           'pkg|lib/claim.dart': '''
 import 'package:mockable/mockable.dart';
 
-part 'claim.mock.g.dart';
-
 @Mockable()
 class Claim {
   const Claim({required this.policy});
@@ -225,7 +213,7 @@ class Policy {
 ''',
         },
         outputs: {
-          'pkg|lib/claim.mock.g.dart': decodedMatches(allOf(
+          'pkg|lib/claim.mock.dart': decodedMatches(allOf(
             contains(r'policy: _$mockPolicy()'),
             contains(r'Policy _$mockPolicy() => Policy('),
             contains('number: MockFaker.word()'),
@@ -242,8 +230,6 @@ class Policy {
           'pkg|lib/claim_with_docs.dart': '''
 import 'package:mockable/mockable.dart';
 
-part 'claim_with_docs.mock.g.dart';
-
 @Mockable()
 class ClaimWithDocs {
   const ClaimWithDocs({required this.docs});
@@ -257,7 +243,7 @@ class Doc {
 ''',
         },
         outputs: {
-          'pkg|lib/claim_with_docs.mock.g.dart': decodedMatches(allOf(
+          'pkg|lib/claim_with_docs.mock.dart': decodedMatches(allOf(
             contains(r'docs: List.generate(3, (_) => _$mockDoc())'),
             contains(r'Doc _$mockDoc() => Doc('),
             contains('title: MockFaker.sentence()'),
@@ -273,8 +259,6 @@ class Doc {
           'mockable|lib/mockable.dart': _mockDataStub,
           'pkg|lib/deep.dart': '''
 import 'package:mockable/mockable.dart';
-
-part 'deep.mock.g.dart';
 
 @Mockable()
 class A {
@@ -294,7 +278,7 @@ class C {
 ''',
         },
         outputs: {
-          'pkg|lib/deep.mock.g.dart': decodedMatches(allOf(
+          'pkg|lib/deep.mock.dart': decodedMatches(allOf(
             contains(r'b: _$mockB()'),
             contains(r'B _$mockB() => B('),
             contains(r'c: _$mockC()'),
@@ -304,53 +288,179 @@ class C {
       );
     });
 
-    test('auto-mock dedupes when the same nested type appears twice',
+    test('deeply nests across separate files from a single annotation',
+        () async {
+      // The real-world case: A -> B -> C, each in its own file, only A
+      // annotated. The standalone `.mock.dart` must import b.dart AND c.dart
+      // and inline helpers all the way down.
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/c.dart': '''
+class C {
+  const C({required this.value});
+  final String value;
+}
+''',
+          'pkg|lib/b.dart': '''
+import 'c.dart';
+
+class B {
+  const B({required this.c});
+  final C c;
+}
+''',
+          'pkg|lib/a.dart': '''
+import 'package:mockable/mockable.dart';
+import 'b.dart';
+
+@Mockable()
+class A {
+  const A({required this.b});
+  final B b;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/a.mock.dart': decodedMatches(allOf([
+            contains("import 'package:pkg/b.dart';"),
+            contains("import 'package:pkg/c.dart';"),
+            contains(r'b: _$mockB()'),
+            contains(r'B _$mockB() => B('),
+            contains(r'c: _$mockC()'),
+            contains(r'C _$mockC() => C('),
+            contains('value: MockFaker.word()'),
+          ])),
+        },
+      );
+    });
+
+    test('resolves a redirecting-factory (Freezed-style) nested type', () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/frz_leaf.dart': '''
+abstract class Leaf {
+  const factory Leaf({required String label}) = _Leaf;
+}
+
+class _Leaf implements Leaf {
+  const _Leaf({required this.label});
+  final String label;
+}
+''',
+          'pkg|lib/frz_root.dart': '''
+import 'package:mockable/mockable.dart';
+import 'frz_leaf.dart';
+
+@Mockable()
+class Root {
+  const Root({required this.leaf});
+  final Leaf leaf;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/frz_root.mock.dart': decodedMatches(allOf(
+            contains("import 'package:pkg/frz_leaf.dart';"),
+            contains(r'leaf: _$mockLeaf()'),
+            contains(r'Leaf _$mockLeaf() => Leaf('),
+            contains('label: MockFaker.word()'),
+          )),
+        },
+      );
+    });
+
+    test('recurses into Map values instead of emitting an empty map',
         () async {
       await testBuilder(
         mockBuilder(BuilderOptions.empty),
         const {
           'mockable|lib/mockable.dart': _mockDataStub,
-          'pkg|lib/dedup.dart': '''
+          'pkg|lib/holder.dart': '''
 import 'package:mockable/mockable.dart';
 
-part 'dedup.mock.g.dart';
-
 @Mockable()
-class Pair {
-  const Pair({required this.left, required this.right});
-  final Side left;
-  final Side right;
+class Holder {
+  const Holder({required this.byId});
+  final Map<String, Entry> byId;
 }
 
-class Side {
-  const Side({required this.label});
-  final String label;
+class Entry {
+  const Entry({required this.value});
+  final String value;
 }
 ''',
         },
         outputs: {
-          'pkg|lib/dedup.mock.g.dart': decodedMatches(predicate<String>((src) {
-            final matches = RegExp(r'Side _\$mockSide\(\) => Side\(')
-                .allMatches(src)
-                .length;
-            return matches == 1 &&
-                src.contains(r'left: _$mockSide()') &&
-                src.contains(r'right: _$mockSide()');
-          }, 'emits exactly one _\$mockSide helper used by both fields')),
+          'pkg|lib/holder.mock.dart': decodedMatches(allOf(
+            isNot(contains('<String, Entry>{}')),
+            contains(r'_$mockEntry()'),
+            contains(r'Entry _$mockEntry() => Entry('),
+          )),
         },
       );
     });
 
-    test('auto-mock prefers a hand-written XxxMock extension over a helper',
+    test('disambiguates two same-named types from different files', () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/left.dart': '''
+class Detail {
+  const Detail({required this.left});
+  final String left;
+}
+''',
+          'pkg|lib/right.dart': '''
+class Detail {
+  const Detail({required this.right});
+  final int right;
+}
+''',
+          'pkg|lib/root.dart': '''
+import 'package:mockable/mockable.dart';
+import 'left.dart' as l;
+import 'right.dart' as r;
+
+@Mockable()
+class Root {
+  const Root({required this.a, required this.b});
+  final l.Detail a;
+  final r.Detail b;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/root.mock.dart': decodedMatches(predicate<String>((src) {
+            // One library keeps the plain name; the colliding one is prefixed.
+            final leftPlain = src.contains("import 'package:pkg/left.dart';");
+            final rightPrefixed =
+                RegExp(r"import 'package:pkg/right\.dart' as _i\d+;")
+                    .hasMatch(src);
+            // Two distinct helpers, one per Detail type.
+            final firstHelper = src.contains(r'_$mockDetail(');
+            final secondHelper = src.contains(r'_$mockDetail$2(');
+            return leftPlain && rightPrefixed && firstHelper && secondHelper;
+          }, 'imports one Detail plainly, prefixes the other, and emits two helpers')),
+        },
+      );
+    });
+
+    test('always inlines a helper even when a hand-written extension exists',
         () async {
+      // Per design: nested types are always inlined. A hand-written extension
+      // on a nested type is only used as a fallback when the type has no
+      // usable constructor (see next test).
       await testBuilder(
         mockBuilder(BuilderOptions.empty),
         const {
           'mockable|lib/mockable.dart': _mockDataStub,
           'pkg|lib/handwritten_nested.dart': '''
 import 'package:mockable/mockable.dart';
-
-part 'handwritten_nested.mock.g.dart';
 
 @Mockable()
 class Outer {
@@ -369,11 +479,79 @@ extension InnerMock on Inner {
 ''',
         },
         outputs: {
-          'pkg|lib/handwritten_nested.mock.g.dart':
+          'pkg|lib/handwritten_nested.mock.dart':
               decodedMatches(predicate<String>((src) {
-            return src.contains('inner: InnerMock.mock()') &&
-                !src.contains(r'_$mockInner');
-          }, 'uses hand-written InnerMock and emits no _\$mockInner helper')),
+            return src.contains(r'inner: _$mockInner()') &&
+                src.contains(r'Inner _$mockInner() => Inner(');
+          }, 'inlines _\$mockInner rather than deferring to the hand-written extension')),
+        },
+      );
+    });
+
+    test('falls back to a hand-written extension when no constructor is usable',
+        () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/no_ctor.dart': '''
+import 'package:mockable/mockable.dart';
+
+@Mockable()
+class Wrapper {
+  const Wrapper({required this.sealed});
+  final Sealed sealed;
+}
+
+class Sealed {
+  Sealed._();
+}
+
+extension SealedMock on Sealed {
+  static Sealed mock() => Sealed._();
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/no_ctor.mock.dart': decodedMatches(allOf(
+            contains(r'sealed: _$mockSealed()'),
+            contains(r'Sealed _$mockSealed() => SealedMock.mock()'),
+          )),
+        },
+      );
+    });
+
+    test('auto-mock dedupes when the same nested type appears twice',
+        () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/dedup.dart': '''
+import 'package:mockable/mockable.dart';
+
+@Mockable()
+class Pair {
+  const Pair({required this.left, required this.right});
+  final Side left;
+  final Side right;
+}
+
+class Side {
+  const Side({required this.label});
+  final String label;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/dedup.mock.dart': decodedMatches(predicate<String>((src) {
+            final matches = RegExp(r'Side _\$mockSide\(\) => Side\(')
+                .allMatches(src)
+                .length;
+            return matches == 1 &&
+                src.contains(r'left: _$mockSide()') &&
+                src.contains(r'right: _$mockSide()');
+          }, 'emits exactly one _\$mockSide helper used by both fields')),
         },
       );
     });
@@ -386,8 +564,6 @@ extension InnerMock on Inner {
           'mockable|lib/mockable.dart': _mockDataStub,
           'pkg|lib/cycle.dart': '''
 import 'package:mockable/mockable.dart';
-
-part 'cycle.mock.g.dart';
 
 @Mockable()
 class Node {
@@ -402,8 +578,7 @@ class Leaf {
 ''',
         },
         outputs: {
-          'pkg|lib/cycle.mock.g.dart':
-              decodedMatches(predicate<String>((src) {
+          'pkg|lib/cycle.mock.dart': decodedMatches(predicate<String>((src) {
             return src.contains(r'child: _$mockLeaf()') &&
                 src.contains(r'Leaf _$mockLeaf() => Leaf(') &&
                 src.contains('parent: null');

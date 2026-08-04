@@ -1,3 +1,12 @@
+## 0.3.0
+
+- Version sync with `mockable_gen 0.3.0`, which now generates a standalone
+  `xxx.mock.dart` library (instead of a `xxx.mock.g.dart` part file) and mocks
+  the entire nested model tree across files from a single `@Mockable()`
+  annotation. No functional changes in this package — the runtime/annotation
+  surface (`@Mockable()`, `@MockableIgnore()`, `MockFaker`) is unchanged; only
+  doc comments were updated to describe the new `.mock.dart` output.
+
 ## 0.2.2
 
 - Republish in lockstep with `mockable_gen 0.2.2`. No API changes.

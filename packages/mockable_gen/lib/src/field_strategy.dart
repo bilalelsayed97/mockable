@@ -3,13 +3,15 @@ import 'package:analyzer/dart/element/nullability_suffix.dart';
 import 'package:analyzer/dart/element/type.dart';
 
 import 'cycle_tracker.dart';
+import 'import_registry.dart';
 
-/// Callback the field strategy invokes when it encounters a nested model type
-/// that is *not* `@Mockable()`-annotated and has no hand-written `XxxMock`
-/// extension. The callback is responsible for emitting (or reusing) a helper
-/// for the type and returning the helper's identifier (e.g.
-/// `_$mockDwPolicyDetails`). Implemented in [code_emitter] so generation and
-/// the registry share the same helper map per output file.
+/// Callback the field strategy invokes when it encounters a nested model type.
+/// The callback is responsible for emitting (or reusing) a private
+/// `_$mockXxx()` helper for the type and returning the helper's identifier. It
+/// is always supplied during real generation; the parameter stays nullable only
+/// so unit tests can exercise the value strategy in isolation. Implemented in
+/// [code_emitter] so generation and the helper registry share one map per
+/// output file.
 typedef AutoMockRegister = String Function(
   InterfaceElement element,
   CycleTracker tracker,
@@ -19,25 +21,27 @@ typedef AutoMockRegister = String Function(
 /// constructor parameter when generating a `mock()` factory.
 ///
 /// [paramName] is the formal parameter name (used for name-based heuristics).
-/// [type] is the declared type. [tracker] is shared cycle state. [auto], when
-/// provided, enables recursion into unannotated nested model types.
+/// [type] is the declared type. [tracker] is shared cycle state. [registry]
+/// records the imports every emitted type reference needs. [auto], when
+/// provided, inlines a helper for any nested model type reached from here.
 String emitValueForParameter({
   required String paramName,
   required DartType type,
   required CycleTracker tracker,
+  required ImportRegistry registry,
   required bool ignored,
   AutoMockRegister? auto,
 }) {
   if (ignored) {
     return type.nullabilitySuffix == NullabilitySuffix.question
         ? 'null'
-        : _typeFallback(type, tracker, auto);
+        : _typeFallback(type, tracker, registry, auto);
   }
 
   final byName = _byName(paramName, type);
   if (byName != null) return byName;
 
-  return _typeFallback(type, tracker, auto);
+  return _typeFallback(type, tracker, registry, auto);
 }
 
 /// Returns `true` if [param] is annotated with `@MockableIgnore()`. Walks both
@@ -112,6 +116,7 @@ String? _byName(String paramName, DartType type) {
 String _typeFallback(
   DartType type,
   CycleTracker tracker,
+  ImportRegistry registry,
   AutoMockRegister? auto,
 ) {
   if (type.isDartCoreString) return 'MockFaker.word()';
@@ -130,53 +135,57 @@ String _typeFallback(
     if (inner == null) return 'const []';
     final innerEl = inner.element;
     if (_isMockableModel(inner) && innerEl is InterfaceElement) {
-      if (_isAnnotatedMockable(innerEl) || _hasMockExtension(innerEl)) {
-        return '${innerEl.name}Mock.mockList(3)';
-      }
+      // Always inline a fresh helper for nested models (even annotated ones),
+      // so the generated file is fully self-contained.
       if (auto != null && !tracker.isInCycle(innerEl)) {
         final helper = auto(innerEl, tracker);
         return 'List.generate(3, (_) => $helper())';
       }
     }
-    final innerExpr = _typeFallback(inner, tracker, auto);
+    final innerExpr = _typeFallback(inner, tracker, registry, auto);
     return 'List.generate(3, (_) => $innerExpr)';
   }
 
   if (type.isDartCoreSet && type is InterfaceType) {
     final inner = type.typeArguments.firstOrNull;
     if (inner == null) return 'const <dynamic>{}';
-    final innerExpr = _typeFallback(inner, tracker, auto);
+    final innerExpr = _typeFallback(inner, tracker, registry, auto);
     return '{$innerExpr}';
   }
 
   if (type.isDartCoreMap && type is InterfaceType) {
     final args = type.typeArguments;
     if (args.length == 2) {
-      return '<${args[0].getDisplayString()}, ${args[1].getDisplayString()}>{}';
+      // Emit one representative entry so nested models inside the value (or
+      // key) type are recursed into, instead of an empty map. A single entry
+      // avoids duplicate-key surprises at runtime.
+      final keyExpr = _typeFallback(args[0], tracker, registry, auto);
+      final valueExpr = _typeFallback(args[1], tracker, registry, auto);
+      return '{$keyExpr: $valueExpr}';
     }
     return '<dynamic, dynamic>{}';
   }
 
   if (element is EnumElement) {
     final preferred = _preferredEnumValue(element);
-    return '${element.name}.$preferred';
+    return '${registry.type(element)}.$preferred';
   }
 
   if (_isMockableModel(type) && element is InterfaceElement) {
     if (tracker.isInCycle(element)) {
-      return _cycleFallback(type, element);
+      return _cycleFallback(type, element, registry);
     }
-    if (_isAnnotatedMockable(element) || _hasMockExtension(element)) {
-      return '${element.name}Mock.mock()';
-    }
+    // Always inline a fresh `_$mock` helper for the nested model.
     if (auto != null) {
       return '${auto(element, tracker)}()';
     }
-    return '${element.name}Mock.mock()';
+    // Conservative fallback for the isolated-testing path where no registrar
+    // is supplied: defer to a (possibly hand-written) extension.
+    return '${registry.type(element)}Mock.mock()';
   }
 
   if (element is InterfaceElement && _hasFactory(element, 'empty')) {
-    return '${element.name}.empty()';
+    return '${registry.type(element)}.empty()';
   }
 
   if (type.nullabilitySuffix == NullabilitySuffix.question) {
@@ -185,27 +194,12 @@ String _typeFallback(
 
   // Last resort — surface the gap to the developer rather than emit
   // something that may compile but will mislead.
-  final name = element?.name ?? type.getDisplayString();
+  if (element is InterfaceElement) {
+    final ref = registry.type(element);
+    return '/* TODO(mockable_gen): provide value for ${element.name} */ null as $ref';
+  }
+  final name = type.getDisplayString();
   return '/* TODO(mockable_gen): provide value for $name */ null as $name';
-}
-
-bool _isAnnotatedMockable(InterfaceElement element) {
-  for (final m in element.metadata.annotations) {
-    final value = m.computeConstantValue();
-    final t = value?.type;
-    if (t == null) continue;
-    if (t.element?.name == 'Mockable') return true;
-  }
-  return false;
-}
-
-bool _hasMockExtension(InterfaceElement element) {
-  final library = element.library;
-  final expected = '${element.name}Mock';
-  for (final ext in library.extensions) {
-    if (ext.name == expected) return true;
-  }
-  return false;
 }
 
 bool _isMockableModel(DartType type) {
@@ -228,14 +222,18 @@ bool _isMockableModel(DartType type) {
   return true;
 }
 
-String _cycleFallback(DartType type, InterfaceElement modelElement) {
+String _cycleFallback(
+  DartType type,
+  InterfaceElement modelElement,
+  ImportRegistry registry,
+) {
   if (_hasFactory(modelElement, 'empty')) {
-    return '${modelElement.name}.empty()';
+    return '${registry.type(modelElement)}.empty()';
   }
   if (type.nullabilitySuffix == NullabilitySuffix.question) {
     return 'null';
   }
-  return '${modelElement.name}()';
+  return '${registry.type(modelElement)}()';
 }
 
 bool _hasFactory(InterfaceElement element, String name) {

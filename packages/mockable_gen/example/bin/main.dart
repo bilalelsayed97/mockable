@@ -1,15 +1,25 @@
 import 'package:mockable/mockable.dart';
-import 'package:mockable_gen_example/user.dart';
+
+// Import the generated standalone library to bring `CompanyMock` into scope.
+import 'package:mockable_gen_example/company.mock.dart';
 
 void main() {
   // Make output reproducible — drop this for varied data.
   MockFaker.seed(2026);
 
-  print('Single mock:');
-  print(UserMock.mock());
+  final company = CompanyMock.mock();
 
-  print('\nList of 5 mocks:');
-  for (final user in UserMock.mockList(5)) {
-    print(user);
+  print('Company: $company\n');
+  for (final department in company.departments) {
+    print('  • $department');
+    print('     primary team lead: ${department.primaryTeam.lead}');
+    for (final member in department.primaryTeam.members) {
+      print('       - $member');
+    }
+  }
+
+  print('\nList of 3 companies:');
+  for (final c in CompanyMock.mockList(3)) {
+    print('  - $c');
   }
 }

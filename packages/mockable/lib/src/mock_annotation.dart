@@ -2,7 +2,7 @@
 ///
 /// Place this annotation on a class alongside `@JsonSerializable()` or
 /// `@Freezed()` (or by itself on any class with a usable constructor) and
-/// `mockable_gen` will emit a sibling `xxx.mock.g.dart` file containing:
+/// `mockable_gen` will emit a sibling `xxx.mock.dart` library containing:
 ///
 /// ```dart
 /// extension XxxMock on Xxx {
@@ -11,11 +11,13 @@
 /// }
 /// ```
 ///
+/// Only the root class needs the annotation — every nested model reachable
+/// from it, at any depth and across any number of files, is mocked
+/// automatically.
+///
 /// Example:
 /// ```dart
 /// import 'package:mockable/mockable.dart';
-///
-/// part 'user.mock.g.dart';
 ///
 /// @Mockable()
 /// class User {
@@ -23,7 +25,7 @@
 ///   const User({required this.email});
 /// }
 ///
-/// // Call site:
+/// // Call site (import the generated 'user.mock.dart'):
 /// final users = UserMock.mockList(5);
 /// ```
 class Mockable {

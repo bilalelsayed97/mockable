@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:faker/faker.dart' as f;
 
 /// A small static façade over `package:faker` providing the helpers that
-/// `mockable_gen` emits in generated `.mock.g.dart` files.
+/// `mockable_gen` emits in generated `.mock.dart` files.
 ///
 /// All methods are static so generated code can call them without holding a
 /// reference. Use [seed] to make subsequent calls deterministic (useful for
