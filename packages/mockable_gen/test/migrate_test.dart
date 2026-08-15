@@ -15,7 +15,8 @@ class User {}
       final result = stripMockPartDirectives(input);
       expect(result.removed, 1);
       expect(result.source, isNot(contains('mock.g.dart')));
-      expect(result.source, contains("import 'package:mockable/mockable.dart';"));
+      expect(
+          result.source, contains("import 'package:mockable/mockable.dart';"));
       expect(result.source, contains('class User {}'));
     });
 

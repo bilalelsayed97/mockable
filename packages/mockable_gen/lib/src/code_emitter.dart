@@ -14,6 +14,10 @@ import 'import_registry.dart';
 /// `_$mockXxx()` helper via [helpers]. Because [helpers] is shared across all
 /// annotated classes in the file, each nested type is emitted at most once.
 ///
+/// Sealed/Freezed-style unions (multiple named factory variants, no unnamed
+/// constructor) get one `mockXxx()` per variant plus `mock()` delegating to the
+/// richest variant.
+///
 /// [defaultCount] is the value used in `mockList([int count = N])`.
 String emitMockExtension({
   required InterfaceElement element,
@@ -31,48 +35,126 @@ String emitMockExtension({
     return '// mockable_gen: skipped $className — generic classes are not supported in v1.';
   }
 
-  final ctor = resolveConstructor(element);
-  if (ctor == null) {
+  final resolved = resolveConstructors(element);
+  if (resolved.mode == MockCtorMode.none) {
+    if (isUninstantiableClass(element) && element.constructors.isNotEmpty) {
+      return '// mockable_gen: skipped $className — abstract class with no factory constructor (cannot be instantiated).';
+    }
     return '// mockable_gen: skipped $className — no usable constructor found.';
   }
 
   final classRef = registry.type(element);
 
-  final body = tracker.enter(element, () {
-    final args = <String>[];
-    for (final param in ctor.formalParameters) {
-      final name = param.name;
-      if (name == null || name.isEmpty) continue;
-      final ignored = isMockIgnored(param);
-      final value = emitValueForParameter(
-        paramName: name,
-        type: param.type,
+  return tracker.enter(element, () {
+    if (resolved.mode == MockCtorMode.single) {
+      final call = emitConstructorCall(
+        ctor: resolved.primary!,
+        classRef: classRef,
         tracker: tracker,
         registry: registry,
-        ignored: ignored,
         auto: helpers.register,
       );
-      args.add(param.isNamed ? '$name: $value' : value);
+      return '''
+extension ${className}Mock on $classRef {
+  static $classRef mock() => $call;
+
+  static List<$classRef> mockList([int count = $defaultCount]) =>
+      List.generate(count, (_) => ${className}Mock.mock());
+}
+''';
     }
 
-    final ctorCall = ctor.name == 'new' || ctor.name == null
-        ? classRef
-        : '$classRef.${ctor.name}';
-    final argsBlock = args.isEmpty ? '' : '${args.join(',\n        ')},';
+    // Union mode: one static method per variant, then mock()/mockList()
+    // delegating to the richest variant.
+    final usedNames = <String>{'mock', 'mockList'};
+    final methodNameByCtor = <ConstructorElement, String>{};
+    final methods = <String>[];
+
+    for (final variant in resolved.variants) {
+      final base = 'mock${_pascal(variant.name!)}';
+      final methodName = _dedupeMethodName(base, usedNames);
+      methodNameByCtor[variant] = methodName;
+
+      final call = emitConstructorCall(
+        ctor: variant,
+        classRef: classRef,
+        tracker: tracker,
+        registry: registry,
+        auto: helpers.register,
+      );
+      final renameNote = methodName == base
+          ? ''
+          : '  // mockable_gen: renamed from $base to avoid a collision.\n';
+      methods.add('$renameNote  static $classRef $methodName() => $call;');
+    }
+
+    final primaryMethod = methodNameByCtor[resolved.primary]!;
 
     return '''
 extension ${className}Mock on $classRef {
-  static $classRef mock() => $ctorCall(
-        $argsBlock
-      );
+${methods.join('\n\n')}
+
+  static $classRef mock() => $primaryMethod();
 
   static List<$classRef> mockList([int count = $defaultCount]) =>
       List.generate(count, (_) => ${className}Mock.mock());
 }
 ''';
   });
+}
 
-  return body;
+/// Emits `ClassRef.name(arg: value, ...)` (or `ClassRef(...)` for the unnamed
+/// constructor) for [ctor], faking every parameter via the field strategy.
+String emitConstructorCall({
+  required ConstructorElement ctor,
+  required String classRef,
+  required CycleTracker tracker,
+  required ImportRegistry registry,
+  required AutoMockRegister auto,
+}) {
+  final args = <String>[];
+  for (final param in ctor.formalParameters) {
+    final name = param.name;
+    if (name == null || name.isEmpty) continue;
+    final ignored = isMockIgnored(param);
+    final value = emitValueForParameter(
+      paramName: name,
+      type: param.type,
+      tracker: tracker,
+      registry: registry,
+      ignored: ignored,
+      auto: auto,
+    );
+    args.add(param.isNamed ? '$name: $value' : value);
+  }
+
+  final call = ctor.name == 'new' || ctor.name == null
+      ? classRef
+      : '$classRef.${ctor.name}';
+  final argsBlock =
+      args.isEmpty ? '' : '\n      ${args.join(',\n      ')},\n    ';
+  return '$call($argsBlock)';
+}
+
+/// Uppercases only the first letter: `loaded` → `Loaded`, `loadedOk` →
+/// `LoadedOk`.
+String _pascal(String name) =>
+    name.isEmpty ? name : name[0].toUpperCase() + name.substring(1);
+
+/// Returns [base] if free, else appends `Variant`, then `$2`, `$3`… until the
+/// name is unique. The chosen name is added to [used].
+String _dedupeMethodName(String base, Set<String> used) {
+  var name = base;
+  if (used.contains(name)) {
+    name = '${base}Variant';
+    var n = 2;
+    while (used.contains(name)) {
+      name = '${base}Variant\$$n';
+      n++;
+    }
+  }
+  used.add(name);
+  return name;
 }
 
 /// Owns the per-output-file map of inlined `_$mockXxx()` helpers. Shared across
@@ -96,6 +178,8 @@ class HelperCollector {
 
   /// Returns the helper function name for [el], generating it (and, on first
   /// visit, its transitive helpers) if necessary. Matches [AutoMockRegister].
+  ///
+  /// A nested union type gets one helper built from its richest variant.
   String register(InterfaceElement el, CycleTracker tracker) {
     final key = _keyFor(el);
     final existing = _nameByKey[key];
@@ -114,41 +198,29 @@ class HelperCollector {
       return helperName;
     }
 
-    final ctor = resolveConstructor(el);
-    if (ctor == null) {
+    final resolved = resolveConstructors(el);
+    if (resolved.mode == MockCtorMode.none) {
       if (_hasMockExtension(el)) {
         _sourceByKey[key] =
             '$typeRef $helperName() => ${typeRef}Mock.mock();\n';
       } else {
-        _sourceByKey[key] =
-            '// mockable_gen: ${el.name} has no usable constructor.\n'
+        final reason = isUninstantiableClass(el) && el.constructors.isNotEmpty
+            ? '${el.name} is abstract with no factory constructor'
+            : '${el.name} has no usable constructor';
+        _sourceByKey[key] = '// mockable_gen: $reason.\n'
             '$typeRef $helperName() => throw UnimplementedError(\'no usable constructor for ${el.name}\');\n';
       }
       return helperName;
     }
 
     final body = tracker.enter(el, () {
-      final args = <String>[];
-      for (final param in ctor.formalParameters) {
-        final pname = param.name;
-        if (pname == null || pname.isEmpty) continue;
-        final ignored = isMockIgnored(param);
-        final value = emitValueForParameter(
-          paramName: pname,
-          type: param.type,
-          tracker: tracker,
-          registry: _registry,
-          ignored: ignored,
-          auto: register,
-        );
-        args.add(param.isNamed ? '$pname: $value' : value);
-      }
-      final call = ctor.name == 'new' || ctor.name == null
-          ? typeRef
-          : '$typeRef.${ctor.name}';
-      final argsBlock =
-          args.isEmpty ? '' : '\n      ${args.join(',\n      ')},\n    ';
-      return '$call($argsBlock)';
+      return emitConstructorCall(
+        ctor: resolved.primary!,
+        classRef: typeRef,
+        tracker: tracker,
+        registry: _registry,
+        auto: register,
+      );
     });
 
     _sourceByKey[key] = '$typeRef $helperName() => $body;\n';
@@ -167,8 +239,7 @@ class HelperCollector {
     return name;
   }
 
-  static String _keyFor(InterfaceElement el) =>
-      '${el.library.uri}#${el.name}';
+  static String _keyFor(InterfaceElement el) => '${el.library.uri}#${el.name}';
 }
 
 /// Returns `true` if [element]'s library declares an extension named

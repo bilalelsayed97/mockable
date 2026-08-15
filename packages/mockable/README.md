@@ -10,10 +10,10 @@ Useful for [Skeletonizer](https://pub.dev/packages/skeletonizer) loading screens
 
 ```yaml
 dependencies:
-  mockable: ^0.3.0
+  mockable: ^0.4.0
 
 dev_dependencies:
-  mockable_gen: ^0.3.0
+  mockable_gen: ^0.4.0
   build_runner: ^2.4.13
 ```
 

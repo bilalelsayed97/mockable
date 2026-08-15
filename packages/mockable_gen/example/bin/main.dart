@@ -1,7 +1,9 @@
 import 'package:mockable/mockable.dart';
 
-// Import the generated standalone library to bring `CompanyMock` into scope.
+// Import the generated standalone libraries to bring the mock extensions
+// into scope.
 import 'package:mockable_gen_example/company.mock.dart';
+import 'package:mockable_gen_example/company_state.mock.dart';
 
 void main() {
   // Make output reproducible — drop this for varied data.
@@ -22,4 +24,11 @@ void main() {
   for (final c in CompanyMock.mockList(3)) {
     print('  - $c');
   }
+
+  // Sealed unions get one mockXxx() per variant; mock() picks the richest.
+  print('\nUnion states:');
+  print('  initial: ${CompanyStateMock.mockInitial()}');
+  print('  loaded:  ${CompanyStateMock.mockLoaded()}');
+  print('  error:   ${CompanyStateMock.mockError()}');
+  print('  default: ${CompanyStateMock.mock()}');
 }

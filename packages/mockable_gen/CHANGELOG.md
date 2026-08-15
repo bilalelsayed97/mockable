@@ -1,3 +1,30 @@
+## 0.4.0
+
+### Added
+
+- **Sealed / Freezed union support.** A class whose only public constructors
+  are two or more named factories (the shape of a Freezed sealed state class)
+  now generates one mock method per variant — e.g. `mockInitial()`,
+  `mockLoaded()`, `mockError()` — plus `mock()`/`mockList()` delegating to the
+  richest variant (most parameters; ties go to the first declared). When a
+  union appears as a nested field, its `_$mockXxx()` helper uses the richest
+  variant. A variant whose method name would collide with `mock()`/`mockList()`
+  (e.g. a variant named `list`) is renamed with a `Variant` suffix and a
+  comment.
+- **Abstract-class support (factories only).** Abstract classes with a factory
+  constructor — including Freezed-style redirecting factories — now generate
+  normally when annotated directly, not just as nested types.
+
+### Fixed
+
+- An abstract class with only generative constructors no longer emits an
+  uncompilable direct instantiation. Annotated directly it is skipped with an
+  explanatory comment; as a nested type it defers to a hand-written `XxxMock`
+  extension when present, else emits a throwing helper. The cycle fallback
+  likewise no longer emits a bare `Foo()` for uninstantiable types.
+
+Released in lockstep with `mockable 0.4.0`.
+
 ## 0.3.0
 
 ### Breaking

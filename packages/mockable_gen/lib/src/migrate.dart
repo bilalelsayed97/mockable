@@ -30,7 +30,8 @@ StripResult stripMockPartDirectives(String source) {
 
   // Drop the directive lines together with their trailing newline so we don't
   // leave a stray empty line behind for every removal.
-  var out = source.replaceAll(RegExp('${_mockPartLine.pattern}\n?', multiLine: true), '');
+  var out = source.replaceAll(
+      RegExp('${_mockPartLine.pattern}\n?', multiLine: true), '');
 
   // Collapse 3+ consecutive newlines (an over-wide gap) down to one blank line.
   out = out.replaceAll(RegExp(r'\n{3,}'), '\n\n');

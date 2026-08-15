@@ -9,8 +9,7 @@ class CycleTracker {
   /// Returns `true` if [element] is already being expanded earlier in the
   /// current generation chain — in which case the caller should emit a
   /// fallback rather than recurse.
-  bool isInCycle(InterfaceElement element) =>
-      _stack.contains(_keyFor(element));
+  bool isInCycle(InterfaceElement element) => _stack.contains(_keyFor(element));
 
   /// Run [body] with [element] pushed onto the cycle-detection stack and
   /// pop it on exit. Use to wrap any recursive descent into nested types.

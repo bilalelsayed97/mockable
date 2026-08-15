@@ -1,3 +1,11 @@
+## 0.4.0
+
+- Version sync with `mockable_gen 0.4.0`, which adds mock generation for
+  abstract classes with factory constructors and per-variant mocks
+  (`mockInitial()`, `mockLoaded()`, …) for sealed/Freezed union classes. No
+  functional changes in this package — the runtime/annotation surface
+  (`@Mockable()`, `@MockableIgnore()`, `MockFaker`) is unchanged.
+
 ## 0.3.0
 
 - Version sync with `mockable_gen 0.3.0`, which now generates a standalone

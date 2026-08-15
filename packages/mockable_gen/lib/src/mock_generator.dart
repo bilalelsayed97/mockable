@@ -20,7 +20,8 @@ import 'migrate.dart';
 class MockLibraryGenerator extends Generator {
   const MockLibraryGenerator();
 
-  static const _checker = TypeChecker.typeNamed(Mockable, inPackage: 'mockable');
+  static const _checker =
+      TypeChecker.typeNamed(Mockable, inPackage: 'mockable');
 
   @override
   Future<String?> generate(LibraryReader library, BuildStep buildStep) async {

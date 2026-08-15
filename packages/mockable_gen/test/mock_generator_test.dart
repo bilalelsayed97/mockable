@@ -336,7 +336,8 @@ class A {
       );
     });
 
-    test('resolves a redirecting-factory (Freezed-style) nested type', () async {
+    test('resolves a redirecting-factory (Freezed-style) nested type',
+        () async {
       await testBuilder(
         mockBuilder(BuilderOptions.empty),
         const {
@@ -373,8 +374,7 @@ class Root {
       );
     });
 
-    test('recurses into Map values instead of emitting an empty map',
-        () async {
+    test('recurses into Map values instead of emitting an empty map', () async {
       await testBuilder(
         mockBuilder(BuilderOptions.empty),
         const {
@@ -521,8 +521,7 @@ extension SealedMock on Sealed {
       );
     });
 
-    test('auto-mock dedupes when the same nested type appears twice',
-        () async {
+    test('auto-mock dedupes when the same nested type appears twice', () async {
       await testBuilder(
         mockBuilder(BuilderOptions.empty),
         const {
@@ -587,7 +586,400 @@ class Leaf {
       );
     });
   });
+
+  group('abstract classes', () {
+    test(
+        'generates for an abstract class with a redirecting factory annotated '
+        'as root', () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/leaf.dart': '''
+import 'package:mockable/mockable.dart';
+
+@Mockable()
+abstract class Leaf {
+  const factory Leaf({required String label}) = _Leaf;
 }
+
+class _Leaf implements Leaf {
+  const _Leaf({required this.label});
+  final String label;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/leaf.mock.dart': decodedMatches(allOf(
+            contains('extension LeafMock on Leaf'),
+            contains('static Leaf mock() => Leaf('),
+            contains('label: MockFaker.word()'),
+          )),
+        },
+      );
+    });
+
+    test('skips an abstract class with only generative constructors', () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/repo.dart': '''
+import 'package:mockable/mockable.dart';
+
+@Mockable()
+abstract class Repo {
+  Repo(this.name);
+  final String name;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/repo.mock.dart': decodedMatches(allOf(
+            contains(
+                'skipped Repo — abstract class with no factory constructor'),
+            isNot(contains('extension RepoMock')),
+          )),
+        },
+      );
+    });
+
+    test('nested abstract generative-only type emits a throwing helper',
+        () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/wrapper.dart': '''
+import 'package:mockable/mockable.dart';
+
+@Mockable()
+class Wrapper {
+  const Wrapper({required this.repo});
+  final Repo repo;
+}
+
+abstract class Repo {
+  Repo(this.name);
+  final String name;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/wrapper.mock.dart': decodedMatches(allOf(
+            contains('Repo is abstract with no factory constructor'),
+            contains('throw UnimplementedError'),
+          )),
+        },
+      );
+    });
+
+    test(
+        'nested abstract generative-only type defers to a hand-written '
+        'extension', () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/wrapper_hand.dart': '''
+import 'package:mockable/mockable.dart';
+
+@Mockable()
+class Wrapper {
+  const Wrapper({required this.repo});
+  final Repo repo;
+}
+
+abstract class Repo {
+  Repo(this.name);
+  final String name;
+}
+
+class FakeRepo extends Repo {
+  FakeRepo() : super('fake');
+}
+
+extension RepoMock on Repo {
+  static Repo mock() => FakeRepo();
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/wrapper_hand.mock.dart': decodedMatches(
+            contains(r'Repo _$mockRepo() => RepoMock.mock()'),
+          ),
+        },
+      );
+    });
+  });
+
+  group('sealed/freezed unions', () {
+    test('generates one mockXxx per variant plus mock()/mockList()', () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/language_selector_state.dart': _languageSelectorFixture,
+        },
+        outputs: {
+          'pkg|lib/language_selector_state.mock.dart': decodedMatches(allOf([
+            contains('extension LanguageSelectorStateMock'),
+            contains('static LanguageSelectorState mockInitial() => '
+                'LanguageSelectorState.initial()'),
+            contains('static LanguageSelectorState mockLoaded() =>'),
+            contains('LanguageSelectorState.loaded('),
+            contains(
+                r'languages: List.generate(3, (_) => _$mockLanguageItem())'),
+            contains(
+                r'filteredLanguages: List.generate(3, (_) => _$mockLanguageItem())'),
+            contains('selectedLanguage: MockFaker.word()'),
+            contains('searchQuery: MockFaker.word()'),
+            contains('static LanguageSelectorState mockChanging() =>'),
+            contains('LanguageSelectorState.changing()'),
+            contains('message: MockFaker.sentence()'),
+            // `loaded` is the richest variant, so mock() delegates to it.
+            contains('static LanguageSelectorState mock() => mockLoaded()'),
+            contains('mockList([int count = 10])'),
+            contains(r'LanguageItem _$mockLanguageItem() =>'),
+            isNot(contains('mockFromJson')),
+          ])),
+        },
+      );
+    });
+
+    test('union mode also triggers for a non-sealed abstract union', () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/view_state.dart': '''
+import 'package:mockable/mockable.dart';
+
+@Mockable()
+abstract class ViewState {
+  const factory ViewState.idle() = _Idle;
+  const factory ViewState.data({required String value}) = _Data;
+}
+
+class _Idle implements ViewState {
+  const _Idle();
+}
+
+class _Data implements ViewState {
+  const _Data({required this.value});
+  final String value;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/view_state.mock.dart': decodedMatches(allOf(
+            contains('static ViewState mockIdle() => ViewState.idle()'),
+            contains('static ViewState mockData() => ViewState.data('),
+            contains('static ViewState mock() => mockData()'),
+          )),
+        },
+      );
+    });
+
+    test('nested union field gets one helper using the richest variant',
+        () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/screen.dart': '''
+import 'package:mockable/mockable.dart';
+
+@Mockable()
+class Screen {
+  const Screen({required this.status});
+  final Status status;
+}
+
+sealed class Status {
+  const factory Status.ready() = _Ready;
+  const factory Status.failed({required String reason}) = _Failed;
+}
+
+class _Ready implements Status {
+  const _Ready();
+}
+
+class _Failed implements Status {
+  const _Failed({required this.reason});
+  final String reason;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/screen.mock.dart': decodedMatches(predicate<String>((src) {
+            final helpers =
+                RegExp(r'Status _\$mockStatus\(\)').allMatches(src).length;
+            return helpers == 1 &&
+                src.contains(r'status: _$mockStatus()') &&
+                src.contains(r'Status _$mockStatus() => Status.failed(');
+          }, 'emits exactly one Status helper built from the richest variant')),
+        },
+      );
+    });
+
+    test('renames a variant method that collides with mockList', () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/layout_state.dart': '''
+import 'package:mockable/mockable.dart';
+
+@Mockable()
+sealed class LayoutState {
+  const factory LayoutState.list() = _ListLayout;
+  const factory LayoutState.grid({required int columns}) = _GridLayout;
+}
+
+class _ListLayout implements LayoutState {
+  const _ListLayout();
+}
+
+class _GridLayout implements LayoutState {
+  const _GridLayout({required this.columns});
+  final int columns;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/layout_state.mock.dart':
+              decodedMatches(predicate<String>((src) {
+            final countSignatures = RegExp(r'mockList\(\[int count = 10\]\)')
+                .allMatches(src)
+                .length;
+            return src.contains(
+                    'static LayoutState mockListVariant() => LayoutState.list()') &&
+                src.contains('renamed from mockList') &&
+                src.contains('static LayoutState mockGrid() =>') &&
+                src.contains('LayoutState.grid(') &&
+                countSignatures == 1;
+          }, 'renames list variant to mockListVariant and keeps one mockList')),
+        },
+      );
+    });
+
+    test('a usable unnamed constructor keeps single-mode output', () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/account.dart': '''
+import 'package:mockable/mockable.dart';
+
+@Mockable()
+class Account {
+  const Account({required this.label});
+  factory Account.guest() => const Account(label: 'guest');
+  factory Account.admin() => const Account(label: 'admin');
+  final String label;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/account.mock.dart': decodedMatches(allOf(
+            contains('static Account mock() => Account('),
+            isNot(contains('mockGuest')),
+            isNot(contains('mockAdmin')),
+          )),
+        },
+      );
+    });
+
+    test('equal-arity variants tie-break to the first declared', () async {
+      await testBuilder(
+        mockBuilder(BuilderOptions.empty),
+        const {
+          'mockable|lib/mockable.dart': _mockDataStub,
+          'pkg|lib/tie_state.dart': '''
+import 'package:mockable/mockable.dart';
+
+@Mockable()
+sealed class TieState {
+  const factory TieState.alpha({required String a}) = _Alpha;
+  const factory TieState.beta({required String b}) = _Beta;
+}
+
+class _Alpha implements TieState {
+  const _Alpha({required this.a});
+  final String a;
+}
+
+class _Beta implements TieState {
+  const _Beta({required this.b});
+  final String b;
+}
+''',
+        },
+        outputs: {
+          'pkg|lib/tie_state.mock.dart': decodedMatches(
+            contains('static TieState mock() => mockAlpha()'),
+          ),
+        },
+      );
+    });
+  });
+}
+
+const _languageSelectorFixture = '''
+import 'package:mockable/mockable.dart';
+
+@Mockable()
+sealed class LanguageSelectorState {
+  const factory LanguageSelectorState.initial() = _Initial;
+
+  const factory LanguageSelectorState.loaded({
+    required List<LanguageItem> languages,
+    required List<LanguageItem> filteredLanguages,
+    required String selectedLanguage,
+    required String searchQuery,
+  }) = _Loaded;
+
+  const factory LanguageSelectorState.changing() = _Changing;
+
+  const factory LanguageSelectorState.error({required String message}) = _Error;
+
+  factory LanguageSelectorState.fromJson(Map<String, dynamic> json) =>
+      const _Initial();
+}
+
+class _Initial implements LanguageSelectorState {
+  const _Initial();
+}
+
+class _Loaded implements LanguageSelectorState {
+  const _Loaded({
+    required this.languages,
+    required this.filteredLanguages,
+    required this.selectedLanguage,
+    required this.searchQuery,
+  });
+  final List<LanguageItem> languages;
+  final List<LanguageItem> filteredLanguages;
+  final String selectedLanguage;
+  final String searchQuery;
+}
+
+class _Changing implements LanguageSelectorState {
+  const _Changing();
+}
+
+class _Error implements LanguageSelectorState {
+  const _Error({required this.message});
+  final String message;
+}
+
+class LanguageItem {
+  const LanguageItem({required this.code, required this.label});
+  final String code;
+  final String label;
+}
+''';
 
 const _mockDataStub = '''
 library mockable;

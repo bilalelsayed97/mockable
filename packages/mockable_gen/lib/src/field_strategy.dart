@@ -2,6 +2,7 @@ import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/nullability_suffix.dart';
 import 'package:analyzer/dart/element/type.dart';
 
+import 'constructor_resolver.dart';
 import 'cycle_tracker.dart';
 import 'import_registry.dart';
 
@@ -81,7 +82,9 @@ String? _byName(String paramName, DartType type) {
     if (has(['phone', 'mobile', 'cell'])) return 'MockFaker.phone()';
     if (lower.contains('firstname')) return 'MockFaker.firstName()';
     if (lower.contains('lastname')) return 'MockFaker.lastName()';
-    if (lower.contains('fullname') || lower == 'name' || lower.endsWith('name')) {
+    if (lower.contains('fullname') ||
+        lower == 'name' ||
+        lower.endsWith('name')) {
       return 'MockFaker.name()';
     }
     if (has(['uuid', 'guid'])) return 'MockFaker.uuid()';
@@ -96,7 +99,9 @@ String? _byName(String paramName, DartType type) {
     if (lower.contains('city')) return 'MockFaker.city()';
     if (lower.contains('country')) return 'MockFaker.country()';
     if (lower == 'id' || lower.endsWith('id')) return 'MockFaker.id()';
-    if (lower == 'code' || lower.endsWith('code')) return 'MockFaker.shortCode()';
+    if (lower == 'code' || lower.endsWith('code')) {
+      return 'MockFaker.shortCode()';
+    }
     return null;
   }
 
@@ -233,7 +238,13 @@ String _cycleFallback(
   if (type.nullabilitySuffix == NullabilitySuffix.question) {
     return 'null';
   }
-  return '${registry.type(modelElement)}()';
+  if (hasUsableUnnamedConstructor(modelElement)) {
+    return '${registry.type(modelElement)}()';
+  }
+  // A bare `Type()` would not compile (abstract/union type in a cycle) —
+  // surface the gap instead.
+  final ref = registry.type(modelElement);
+  return '/* TODO(mockable_gen): cyclic uninstantiable type ${modelElement.name} */ null as $ref';
 }
 
 bool _hasFactory(InterfaceElement element, String name) {

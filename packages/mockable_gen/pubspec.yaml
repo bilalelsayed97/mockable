@@ -3,7 +3,7 @@ description: >-
   Build_runner generator that emits .mock.dart files with realistic
   XxxMock.mock() / XxxMock.mockList(n) factories for classes annotated
   with @Mockable() from package:mockable.
-version: 0.3.0
+version: 0.4.0
 repository: https://github.com/bilalelsayed97/mockable
 issue_tracker: https://github.com/bilalelsayed97/mockable/issues
 homepage: https://github.com/bilalelsayed97/mockable
@@ -21,7 +21,7 @@ dependencies:
   build: ">=2.4.0 <5.0.0"
   dart_style: ^3.1.1
   meta: ^1.16.0
-  mockable: ^0.3.0
+  mockable: ^0.4.0
   source_gen: ">=2.0.0 <5.0.0"
 
 dev_dependencies:
